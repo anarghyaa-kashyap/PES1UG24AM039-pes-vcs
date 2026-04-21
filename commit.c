@@ -169,6 +169,20 @@ int commit_create(const char *message, ObjectID *commit_id_out) {
     commit.has_parent = has_parent;
     if (has_parent) commit.parent = parent_id;
 
-    (void)commit_id_out;
-    return -1; // not done yet
+    // Step 4: Serialize commit to text
+    void *commit_data;
+    size_t commit_len;
+    if (commit_serialize(&commit, &commit_data, &commit_len) != 0) return -1;
+
+    // Step 5: Write commit object to store
+    ObjectID commit_id;
+    int rc = object_write(OBJ_COMMIT, commit_data, commit_len, &commit_id);
+    free(commit_data);
+    if (rc != 0) return -1;
+
+    // Step 6: Update HEAD to point to new commit
+    if (head_update(&commit_id) != 0) return -1;
+
+    *commit_id_out = commit_id;
+    return 0;
 }
