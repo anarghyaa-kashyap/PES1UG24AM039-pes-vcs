@@ -79,8 +79,32 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
     snprintf(shard_dir, sizeof(shard_dir), "%s/%.2s", OBJECTS_DIR, hex);
     mkdir(shard_dir, 0755);
 
+    char tmp_path[512];
+    snprintf(tmp_path, sizeof(tmp_path), "%s/tmp_XXXXXX", shard_dir);
+    int fd = mkstemp(tmp_path);
+    if (fd < 0) { free(full); return -1; }
+
+    ssize_t written = write(fd, full, full_len);
     free(full);
-    return -1; // write not done yet
+
+    if (written < 0 || (size_t)written != full_len) {
+        close(fd); unlink(tmp_path); return -1;
+    }
+
+    fsync(fd);
+    close(fd);
+
+    char final_path[512];
+    object_path(&id, final_path, sizeof(final_path));
+
+    if (rename(tmp_path, final_path) != 0) {
+        unlink(tmp_path); return -1;
+    }
+
+    int dir_fd = open(shard_dir, O_RDONLY);
+    if (dir_fd >= 0) { fsync(dir_fd); close(dir_fd); }
+
+    return 0;
 }
 
 int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_t *len_out) {
