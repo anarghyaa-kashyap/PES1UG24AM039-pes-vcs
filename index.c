@@ -168,6 +168,61 @@ int index_save(const Index *index) {
 }
 
 int index_add(Index *index, const char *path) {
-    (void)index; (void)path;
-    return -1;
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        fprintf(stderr, "error: cannot open '%s'\n", path);
+        return -1;
+    }
+
+    fseek(f, 0, SEEK_END);
+    long file_size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    if (file_size < 0) { fclose(f); return -1; }
+
+    uint8_t *contents = malloc((size_t)file_size + 1);
+    if (!contents) { fclose(f); return -1; }
+
+    size_t read_bytes = fread(contents, 1, (size_t)file_size, f);
+    fclose(f);
+
+    if (read_bytes != (size_t)file_size) {
+        free(contents);
+        return -1;
+    }
+
+    ObjectID blob_id;
+    if (object_write(OBJ_BLOB, contents, (size_t)file_size, &blob_id) != 0) {
+        free(contents);
+        return -1;
+    }
+    free(contents);
+
+    struct stat st;
+    if (lstat(path, &st) != 0) return -1;
+
+    uint32_t mode;
+    if (S_ISDIR(st.st_mode))       mode = 0040000;
+    else if (st.st_mode & S_IXUSR) mode = 0100755;
+    else                           mode = 0100644;
+
+    IndexEntry *existing = index_find(index, path);
+    if (existing) {
+        existing->mode = mode;
+        existing->hash = blob_id;
+        existing->mtime_sec = (uint64_t)st.st_mtime;
+        existing->size = (uint32_t)st.st_size;
+    } else {
+        if (index->count >= MAX_INDEX_ENTRIES) return -1;
+        IndexEntry *e = &index->entries[index->count];
+        e->mode = mode;
+        e->hash = blob_id;
+        e->mtime_sec = (uint64_t)st.st_mtime;
+        e->size = (uint32_t)st.st_size;
+        strncpy(e->path, path, sizeof(e->path) - 1);
+        e->path[sizeof(e->path) - 1] = '\0';
+        index->count++;
+    }
+
+    return index_save(index);
 }
