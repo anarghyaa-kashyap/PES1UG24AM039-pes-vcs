@@ -137,18 +137,34 @@ static int compare_index_entries(const void *a, const void *b) {
 }
 
 int index_save(const Index *index) {
-    Index sorted = *index;
-    qsort(sorted.entries, (size_t)sorted.count, sizeof(IndexEntry), compare_index_entries);
-
     char tmp_path[256];
     snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", INDEX_FILE);
 
     FILE *f = fopen(tmp_path, "w");
     if (!f) return -1;
 
+    // Write entries sorted by path without copying the whole struct
+    // First collect and sort indices
+    int count = index->count;
+    int *order = malloc((size_t)count * sizeof(int));
+    if (!order) { fclose(f); return -1; }
+    for (int i = 0; i < count; i++) order[i] = i;
+
+    // Simple insertion sort by path
+    for (int i = 1; i < count; i++) {
+        int key = order[i];
+        int j = i - 1;
+        while (j >= 0 && strcmp(index->entries[order[j]].path,
+                                index->entries[key].path) > 0) {
+            order[j + 1] = order[j];
+            j--;
+        }
+        order[j + 1] = key;
+    }
+
     char hex[HASH_HEX_SIZE + 1];
-    for (int i = 0; i < sorted.count; i++) {
-        const IndexEntry *e = &sorted.entries[i];
+    for (int i = 0; i < count; i++) {
+        const IndexEntry *e = &index->entries[order[i]];
         hash_to_hex(&e->hash, hex);
         fprintf(f, "%o %s %llu %u %s\n",
                 e->mode, hex,
@@ -156,6 +172,7 @@ int index_save(const Index *index) {
                 e->size, e->path);
     }
 
+    free(order);
     fflush(f);
     fsync(fileno(f));
     fclose(f);
