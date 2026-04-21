@@ -165,6 +165,17 @@ static int write_tree_level(const IndexEntry *entries, int count,
 }
 
 int tree_from_index(ObjectID *id_out) {
-    (void)id_out;
-    return -1;
+    Index index;
+    if (index_load(&index) != 0) return -1;
+    if (index.count == 0) {
+        Tree empty;
+        empty.count = 0;
+        void *data;
+        size_t len;
+        if (tree_serialize(&empty, &data, &len) != 0) return -1;
+        int rc = object_write(OBJ_TREE, data, len, id_out);
+        free(data);
+        return rc;
+    }
+    return write_tree_level(index.entries, index.count, "", id_out);
 }
