@@ -68,8 +68,19 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
     compute_hash(full, full_len, &id);
     *id_out = id;
 
+    if (object_exists(&id)) {
+        free(full);
+        return 0;
+    }
+
+    char hex[HASH_HEX_SIZE + 1];
+    hash_to_hex(&id, hex);
+    char shard_dir[256];
+    snprintf(shard_dir, sizeof(shard_dir), "%s/%.2s", OBJECTS_DIR, hex);
+    mkdir(shard_dir, 0755);
+
     free(full);
-    return -1; // not done yet
+    return -1; // write not done yet
 }
 
 int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_t *len_out) {
