@@ -108,7 +108,6 @@ static int write_tree_level(const IndexEntry *entries, int count,
         const char *slash = strchr(rel, '/');
 
         if (!slash) {
-            // Direct file at this level
             TreeEntry *te = &tree.entries[tree.count];
             te->mode = entries[i].mode;
             te->hash = entries[i].hash;
@@ -117,7 +116,43 @@ static int write_tree_level(const IndexEntry *entries, int count,
             tree.count++;
             i++;
         } else {
-            i++; // subdirectory handling coming next
+            char subdir_name[256];
+            size_t subdir_name_len = (size_t)(slash - rel);
+            if (subdir_name_len >= sizeof(subdir_name)) { i++; continue; }
+            memcpy(subdir_name, rel, subdir_name_len);
+            subdir_name[subdir_name_len] = '\0';
+
+            char new_prefix[512];
+            if (prefix[0] == '\0') {
+                snprintf(new_prefix, sizeof(new_prefix), "%s", subdir_name);
+            } else {
+                snprintf(new_prefix, sizeof(new_prefix), "%s/%s", prefix, subdir_name);
+            }
+
+            int j = i;
+            while (j < count) {
+                const char *fp = entries[j].path;
+                size_t np_len = strlen(new_prefix);
+                if (strncmp(fp, new_prefix, np_len) == 0 &&
+                    (fp[np_len] == '/' || fp[np_len] == '\0')) {
+                    j++;
+                } else {
+                    break;
+                }
+            }
+
+            ObjectID sub_id;
+            if (write_tree_level(entries + i, j - i, new_prefix, &sub_id) != 0)
+                return -1;
+
+            TreeEntry *te = &tree.entries[tree.count];
+            te->mode = MODE_DIR;
+            te->hash = sub_id;
+            strncpy(te->name, subdir_name, sizeof(te->name) - 1);
+            te->name[sizeof(te->name) - 1] = '\0';
+            tree.count++;
+
+            i = j;
         }
     }
 
