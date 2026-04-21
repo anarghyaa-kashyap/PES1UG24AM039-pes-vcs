@@ -1,17 +1,4 @@
-# PES-VCS Lab Report
-
-## Screenshots
-
-- 1A: test_objects output — all tests passing
-- 1B: find .pes/objects -type f — sharded directory structure
-- 2A: test_tree output — all tests passing
-- 2B: xxd of raw tree object
-- 3A: pes init → pes add → pes status sequence
-- 3B: cat .pes/index — text format index
-- 4A: pes log — three commits
-- 4B: find .pes -type f | sort — object store growth
-- 4C: cat .pes/refs/heads/main and cat .pes/HEAD
-- Final: make test-integration — all tests completed
+# Report
 
 ## Phase 5: Branching and Checkout
 
