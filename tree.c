@@ -84,7 +84,50 @@ int tree_serialize(const Tree *tree, void **data_out, size_t *len_out) {
 }
 
 static int write_tree_level(const IndexEntry *entries, int count,
-                            const char *prefix, ObjectID *id_out);
+                            const char *prefix, ObjectID *id_out) {
+    Tree tree;
+    tree.count = 0;
+
+    int i = 0;
+    while (i < count) {
+        const char *full_path = entries[i].path;
+
+        const char *rel;
+        if (prefix[0] == '\0') {
+            rel = full_path;
+        } else {
+            size_t prefix_len = strlen(prefix);
+            if (strncmp(full_path, prefix, prefix_len) != 0 ||
+                full_path[prefix_len] != '/') {
+                i++;
+                continue;
+            }
+            rel = full_path + prefix_len + 1;
+        }
+
+        const char *slash = strchr(rel, '/');
+
+        if (!slash) {
+            // Direct file at this level
+            TreeEntry *te = &tree.entries[tree.count];
+            te->mode = entries[i].mode;
+            te->hash = entries[i].hash;
+            strncpy(te->name, rel, sizeof(te->name) - 1);
+            te->name[sizeof(te->name) - 1] = '\0';
+            tree.count++;
+            i++;
+        } else {
+            i++; // subdirectory handling coming next
+        }
+    }
+
+    void *tree_data;
+    size_t tree_len;
+    if (tree_serialize(&tree, &tree_data, &tree_len) != 0) return -1;
+    int rc = object_write(OBJ_TREE, tree_data, tree_len, id_out);
+    free(tree_data);
+    return rc;
+}
 
 int tree_from_index(ObjectID *id_out) {
     (void)id_out;
